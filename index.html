@@ -489,13 +489,17 @@ footer {
     <div class="section-title" style="margin-bottom:1.25rem">카카오맵 주차장 안내</div>
     <div class="map-card">
       <div class="map-toolbar">
-        <button onclick="initKakaoMap()">지도 다시 불러오기</button>
+        <button onclick="initKakaoMap()">미니맵</button>
         <button class="secondary" onclick="openKakaoMapSite()">카카오맵에서 보기</button>
+        <button class="secondary" id="pin-edit-btn" onclick="togglePinEditMode()">핀 위치 조정</button>
+        <button class="secondary" id="pin-save-btn" onclick="savePinCoords()" style="display:none">핀 위치 저장</button>
+        <button class="secondary" onclick="resetPinCoords()">핀 초기화</button>
+        <button class="secondary" onclick="copyPinCoords()">좌표 코드 복사</button>
       </div>
       <div id="map-warning" class="map-warning"></div>
       <div id="map"></div>
       <div class="map-help">
-        카카오맵 JavaScript API 키가 적용된 상태입니다. 지도가 보이지 않으면 카카오 개발자센터의 Web 플랫폼 도메인에 <b>https://taehoon1113.github.io</b>가 등록되어 있는지 확인하세요. 출발지/도착지를 선택하면 지도 위에 경로선이 표시됩니다.
+        카카오맵 미니맵입니다. 출발지/도착지를 선택하면 지도 위에 경로선이 표시됩니다. 핀 위치가 맞지 않으면 <b>핀 위치 조정</b>을 누른 뒤 마커를 드래그하고 <b>핀 위치 저장</b>을 누르세요. 저장된 핀은 현재 기기 브라우저에 보관됩니다.
       </div>
     </div>
   </div>
@@ -647,30 +651,46 @@ const minAlt = Math.min(...altLots.map(l=>l.alt));
 
 // 카카오맵 표시용 임시 좌표: 백석대학교 캠퍼스 중심을 기준으로 배치했습니다.
 // 실제 위치가 필요하면 아래 lat/lng 값만 수정하면 됩니다.
-const lotCoords = {
-  "운동장 주차장": {lat:36.84075,lng:127.18320},
-  "체육관 주차장": {lat:36.84125,lng:127.18380},
-  "승리관 주차장": {lat:36.84020,lng:127.18440},
-  "기숙사 주차장(지하 포함)": {lat:36.83965,lng:127.18520},
-  "[본부동 뒤] 주차장": {lat:36.84195,lng:127.18510},
-  "[본부동 정문]": {lat:36.84155,lng:127.18465},
-  "[예술동 옆] 주차장": {lat:36.84310,lng:127.18595},
-  "[지혜관 뒤] 주차장": {lat:36.84225,lng:127.18610},
-  "[음악동 앞] 주차장": {lat:36.84085,lng:127.18495},
-  "[진리관 앞] 주차장": {lat:36.84020,lng:127.18565},
-  "[진리관 뒤]": {lat:36.84065,lng:127.18625},
-  "[목양관 옆] 주차장": {lat:36.83965,lng:127.18600},
-  "[학생복지관] 주차장": {lat:36.83895,lng:127.18550},
-  "[학생복지관 옆]": {lat:36.83875,lng:127.18600},
-  "[인성관 옆]": {lat:36.84110,lng:127.18680},
-  "교수회관 주차장": {lat:36.84065,lng:127.18665},
-  "지혜관 뒤 지하주차장": {lat:36.84235,lng:127.18555},
-  "지혜관 앞 (도서관 1자 라인)": {lat:36.84205,lng:127.18685},
-  "지혜관 앞 주차장": {lat:36.84155,lng:127.18645}
+const DEFAULT_LOT_COORDS = {
+  "운동장 주차장": {lat:36.8407636,lng:127.1860207},
+  "체육관 주차장": {lat:36.8415120,lng:127.1867520},
+  "승리관 주차장": {lat:36.8415361,lng:127.1860335},
+  "기숙사 주차장(지하 포함)": {lat:36.8421146,lng:127.1858253},
+  "[본부동 뒤] 주차장": {lat:36.8386771,lng:127.1862088},
+  "[본부동 정문]": {lat:36.8393066,lng:127.1856647},
+  "[예술동 옆] 주차장": {lat:36.8380409,lng:127.1873099},
+  "[지혜관 뒤] 주차장": {lat:36.8383707,lng:127.1850162},
+  "[음악동 앞] 주차장": {lat:36.8403555,lng:127.1854575},
+  "[진리관 앞] 주차장": {lat:36.8404588,lng:127.1844000},
+  "[진리관 뒤]": {lat:36.8400024,lng:127.1846897},
+  "[목양관 옆] 주차장": {lat:36.8407749,lng:127.1840449},
+  "[학생복지관] 주차장": {lat:36.8407483,lng:127.1827736},
+  "[학생복지관 옆]": {lat:36.8404709,lng:127.1829080},
+  "[인성관 옆]": {lat:36.8391673,lng:127.1837180},
+  "교수회관 주차장": {lat:36.8394722,lng:127.1845643},
+  "지혜관 뒤 지하주차장": {lat:36.8381050,lng:127.1854829},
+  "지혜관 앞 (도서관 1자 라인)": {lat:36.8382268,lng:127.1843990},
+  "지혜관 앞 주차장": {lat:36.8389763,lng:127.1838947}
 };
-let kakaoMap=null, kakaoMarkers=[], kakaoRouteLine=null;
+
+function cloneCoords(src){
+  return Object.fromEntries(Object.entries(src).map(([name,c])=>[name,{lat:c.lat,lng:c.lng}]));
+}
+
+function loadSavedLotCoords(){
+  try{
+    const saved=localStorage.getItem('baekseok_lot_coords');
+    if(!saved) return cloneCoords(DEFAULT_LOT_COORDS);
+    return {...cloneCoords(DEFAULT_LOT_COORDS), ...JSON.parse(saved)};
+  }catch(e){
+    return cloneCoords(DEFAULT_LOT_COORDS);
+  }
+}
+
+let lotCoords = loadSavedLotCoords();
+let kakaoMap=null, kakaoMarkers=[], kakaoRouteLine=null, kakaoOpenInfoWindow=null, pinEditMode=false;
 const KAKAO_JS_KEY = 'f2481b48932b80e22d1a6d69e7804835';
-const KAKAO_CENTER = {lat:36.8410, lng:127.1854};
+const KAKAO_CENTER = {lat:36.83995, lng:127.18495};
 
 function showMapWarning(msg){
   const w=document.getElementById('map-warning');
@@ -723,6 +743,99 @@ function loadKakaoSdk(key){
   document.head.appendChild(s);
 }
 
+
+function closeKakaoInfoWindow(){
+  if(kakaoOpenInfoWindow){
+    kakaoOpenInfoWindow.close();
+    kakaoOpenInfoWindow=null;
+  }
+}
+
+function renderKakaoMarkers(){
+  if(!kakaoMap || !window.kakao || !kakao.maps) return;
+
+  kakaoMarkers.forEach(item=>item.marker.setMap(null));
+  kakaoMarkers=[];
+  closeKakaoInfoWindow();
+
+  lots.forEach(l=>{
+    const c=lotCoords[l.name];
+    if(!c) return;
+
+    const marker=new kakao.maps.Marker({
+      position:new kakao.maps.LatLng(c.lat,c.lng),
+      map:kakaoMap,
+      title:l.name,
+      draggable:pinEditMode
+    });
+
+    const info=new kakao.maps.InfoWindow({
+      content:`<div style="padding:9px 12px;font-size:13px;white-space:nowrap;font-weight:700">${l.name}</div>`
+    });
+
+    kakao.maps.event.addListener(marker,'click',()=>{
+      if(kakaoOpenInfoWindow === info){
+        closeKakaoInfoWindow();
+        return;
+      }
+      closeKakaoInfoWindow();
+      info.open(kakaoMap,marker);
+      kakaoOpenInfoWindow=info;
+    });
+
+    kakao.maps.event.addListener(marker,'dragend',()=>{
+      const pos=marker.getPosition();
+      lotCoords[l.name]={
+        lat:Number(pos.getLat().toFixed(6)),
+        lng:Number(pos.getLng().toFixed(6))
+      };
+      updateMapRoute();
+      showMapWarning(`${l.name} 핀 위치가 변경되었습니다. 확정하려면 [핀 위치 저장]을 누르세요.`);
+    });
+
+    kakaoMarkers.push({name:l.name, marker});
+  });
+}
+
+function togglePinEditMode(){
+  pinEditMode=!pinEditMode;
+  const editBtn=document.getElementById('pin-edit-btn');
+  const saveBtn=document.getElementById('pin-save-btn');
+  if(editBtn) editBtn.textContent=pinEditMode?'핀 조정 종료':'핀 위치 조정';
+  if(saveBtn) saveBtn.style.display=pinEditMode?'inline-block':'none';
+  kakaoMarkers.forEach(item=>item.marker.setDraggable(pinEditMode));
+  showMapWarning(pinEditMode?'핀 위치 조정 모드입니다. 마커를 끌어서 위치를 맞춘 뒤 [핀 위치 저장]을 누르세요.':'핀 위치 조정 모드를 종료했습니다.');
+}
+
+function savePinCoords(){
+  localStorage.setItem('baekseok_lot_coords', JSON.stringify(lotCoords));
+  hideMapWarning();
+  alert('현재 기기 브라우저에 핀 위치를 저장했습니다.');
+}
+
+function resetPinCoords(){
+  if(!confirm('저장된 핀 위치를 초기화할까요?')) return;
+  localStorage.removeItem('baekseok_lot_coords');
+  lotCoords=cloneCoords(DEFAULT_LOT_COORDS);
+  pinEditMode=false;
+  const editBtn=document.getElementById('pin-edit-btn');
+  const saveBtn=document.getElementById('pin-save-btn');
+  if(editBtn) editBtn.textContent='핀 위치 조정';
+  if(saveBtn) saveBtn.style.display='none';
+  renderKakaoMarkers();
+  updateMapRoute();
+  showMapWarning('핀 위치를 초기 좌표로 되돌렸습니다.');
+}
+
+function copyPinCoords(){
+  const code='const lotCoords = '+JSON.stringify(lotCoords,null,2).replace(/"lat"/g,'lat').replace(/"lng"/g,'lng')+';';
+  navigator.clipboard?.writeText(code).then(()=>{
+    alert('현재 핀 좌표 코드를 복사했습니다. GitHub 코드에 반영할 때 사용할 수 있습니다.');
+  }).catch(()=>{
+    prompt('복사할 좌표 코드입니다. 길게 눌러 복사하세요.', code);
+  });
+}
+
 function drawKakaoMap(){
   const container=document.getElementById('map');
   if(!container || !window.kakao || !kakao.maps) return;
@@ -741,22 +854,9 @@ function drawKakaoMap(){
 
   kakaoMap.addControl(new kakao.maps.MapTypeControl(), kakao.maps.ControlPosition.TOPRIGHT);
   kakaoMap.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
+  kakao.maps.event.addListener(kakaoMap,'click',closeKakaoInfoWindow);
 
-  kakaoMarkers=[];
-  lots.forEach(l=>{
-    const c=lotCoords[l.name];
-    if(!c) return;
-    const marker=new kakao.maps.Marker({
-      position:new kakao.maps.LatLng(c.lat,c.lng),
-      map:kakaoMap,
-      title:l.name
-    });
-    const info=new kakao.maps.InfoWindow({
-      content:`<div style="padding:8px 10px;font-size:12px;white-space:nowrap"><b>${l.name}</b><br>일반 ${l.general}면 · 장애인 ${l.disabled}면${l.kb?' · 킥보드':''}</div>`
-    });
-    kakao.maps.event.addListener(marker,'click',()=>info.open(kakaoMap,marker));
-    kakaoMarkers.push(marker);
-  });
+  renderKakaoMarkers();
   updateMapRoute();
 }
 
